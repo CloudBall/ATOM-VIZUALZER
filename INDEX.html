@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Quantum Chemistry Lab</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+body{
+  margin:0;
+  font-family:Segoe UI;
+  background:#020617;
+  color:white;
+  text-align:center;
+}
+input,button{
+  padding:10px;
+  margin:5px;
+  border-radius:8px;
+  border:none;
+}
+button{background:#22c55e;}
+#viewer{height:500px;}
+.panel{
+  margin-top:10px;
+  background:rgba(255,255,255,0.05);
+  padding:10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>⚛️ Quantum Chemistry Lab</h1>
+
+<input id="eq" placeholder="H2 + O2">
+<button onclick="predictReaction()">Predict + Simulate</button>
+
+<div id="viewer"></div>
+<div class="panel" id="info"></div>
+<div class="panel" id="analytics"></div>
+
+<script>
+// ---------------- ELEMENT DATA ----------------
+const E = {
+  H:{valency:1,color:0xffffff},
+  O:{valency:2,color:0xff0000},
+  C:{valency:4,color:0x333333},
+  N:{valency:3,color:0x0000ff}
+};
+
+let scene, camera, renderer;
+let atoms=[], meshes=[], clouds=[];
+
+// ---------------- AI REACTION PREDICTOR ----------------
+function predictReaction(){
+  let input=document.getElementById("eq").value;
+
+  let output="";
+
+  if(input.includes("H2") && input.includes("O2")) output="H2O";
+  else if(input.includes("C") && input.includes("O2")) output="CO2";
+  else if(input.includes("N2") && input.includes("H2")) output="NH3";
+  else output="Unknown";
+
+  document.getElementById("info").innerHTML=
+    "🧠 Predicted Product: "+output;
+
+  run(output);
+}
+
+// ---------------- PARSE ----------------
+function parse(formula){
+  let arr=[];
+  let r=/([A-Z][a-z]*)(\d*)/g, m;
+
+  while(m=r.exec(formula)){
+    let el=m[1];
+    let n=parseInt(m[2]||1);
+
+    for(let i=0;i<n;i++){
+      arr.push({type:el});
+    }
+  }
+  return arr;
+}
+
+// ---------------- INIT ----------------
+function init(){
+  const container=document.getElementById("viewer");
+  container.innerHTML="";
+
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(75,container.clientWidth/500,0.1,1000);
+  renderer=new THREE.WebGLRenderer({antialias:true});
+
+  renderer.setSize(container.clientWidth,500);
+  container.appendChild(renderer.domElement);
+
+  camera.position.z=8;
+
+  let light=new THREE.PointLight(0xffffff,1);
+  light.position.set(5,5,5);
+  scene.add(light);
+}
+
+// ---------------- CREATE ATOMS ----------------
+function createAtoms(){
+  meshes=[];
+
+  atoms.forEach((a,i)=>{
+    let geo=new THREE.SphereGeometry(0.4,32,32);
+    let mat=new THREE.MeshPhongMaterial({color:E[a.type].color});
+    let m=new THREE.Mesh(geo,mat);
+
+    m.position.x=(i-atoms.length/2)*2;
+    m.position.y=Math.random()*2-1;
+
+    scene.add(m);
+    meshes.push(m);
+
+    // QUANTUM CLOUD
+    let cloudGeo=new THREE.BufferGeometry();
+    let points=[];
+
+    for(let j=0;j<200;j++){
+      points.push(
+        m.position.x + (Math.random()-0.5)*1.5,
+        m.position.y + (Math.random()-0.5)*1.5,
+        (Math.random()-0.5)*1.5
+      );
+    }
+
+    cloudGeo.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(points,3)
+    );
+
+    let cloudMat=new THREE.PointsMaterial({
+      color:0x38bdf8,
+      size:0.05
+    });
+
+    let cloud=new THREE.Points(cloudGeo,cloudMat);
+    scene.add(cloud);
+    clouds.push(cloud);
+  });
+}
+
+// ---------------- ENERGY SIMULATION ----------------
+function applyPhysics(){
+  for(let i=0;i<meshes.length;i++){
+    for(let j=i+1;j<meshes.length;j++){
+
+      let a=meshes[i], b=meshes[j];
+
+      let dx=b.position.x-a.position.x;
+      let dy=b.position.y-a.position.y;
+      let dz=b.position.z-a.position.z;
+
+      let dist=Math.sqrt(dx*dx+dy*dy+dz*dz)+0.01;
+
+      // repel
+      let force=0.05/dist;
+      a.position.x -= force*dx;
+      b.position.x += force*dx;
+
+      // attract
+      if(dist<2){
+        let f=(dist-1.2)*0.02;
+        a.position.x += f*dx;
+        b.position.x -= f*dx;
+      }
+    }
+  }
+}
+
+// ---------------- ANALYTICS ----------------
+function updateAnalytics(){
+  let bonds=0;
+
+  for(let i=0;i<meshes.length;i++){
+    for(let j=i+1;j<meshes.length;j++){
+      if(meshes[i].position.distanceTo(meshes[j].position)<1.5)
+        bonds++;
+    }
+  }
+
+  document.getElementById("analytics").innerHTML=`
+  📊 Atoms: ${meshes.length} <br>
+  🔗 Bonds: ${bonds}
+  `;
+}
+
+// ---------------- RUN ----------------
+function run(product){
+  atoms=parse(product);
+
+  init();
+  createAtoms();
+  animate();
+}
+
+// ---------------- LOOP ----------------
+function animate(){
+  requestAnimationFrame(animate);
+
+  applyPhysics();
+  updateAnalytics();
+
+  scene.rotation.y+=0.003;
+
+  renderer.render(scene,camera);
+}
+</script>
+
+</body>
+</html>
